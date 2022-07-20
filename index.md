@@ -2,6 +2,8 @@
 layout: default
 ---
 
+This will be the article for the Gluu Solo and AWS integration using SCIM. 
+
 Text can be **bold**, _italic_, or ~~strikethrough~~.
 
 [Link to another page](./another-page.html).
