@@ -9,8 +9,10 @@ This article will guide you through setting up SCIM on your Gluu Solo instance, 
 ## Table of contents
 
 1. [Requirements](#requirements)
-
 2. [Preparing the Gluu Server](#preparing-the-gluu-server)
+3. [Configuring AWS to accept SAML requests](#configuring-aws-to-accept-saml-requests)
+
+
 
   
 
@@ -22,7 +24,7 @@ This article will guide you through setting up SCIM on your Gluu Solo instance, 
 
 3. An email address associated with an AWS account that you want to SSO with
 
-4. A way to craft SCIM requests for an endpoint protected by [UMA](https://docs.kantarainitiative.org/uma/wg/rec-oauth-uma-grant-2.0.html). If you are using Java, we recommend using [scim-client](https://github.com/GluuFederation/scim/tree/master/scim-client).
+4. A way to craft SCIM requests for an endpoint protected by [Oauth 2.0](https://datatracker.ietf.org/doc/html/rfc6749). If you are using Java, we recommend using [scim-client](https://github.com/GluuFederation/scim/tree/master/scim-client).
 
   
 
@@ -60,12 +62,56 @@ Next, we need to enable the SCIM API. Log onto the oxTrust GUI, go to `Organizat
 
 ![oxTrust Panel](https://gluu.org/docs/gluu-server/4.4/img/scim/enable-scim.png)
 
-After that, navigate to `Configuration` > `JSON Configuration` > `OxTrust Configuration`, locate the `Scim Properties` section (use Ctrl + F and search for `Scim`) and set the protection mode to `UMA`. Then save the configuration at the bottom of the page.
+After that, navigate to `Configuration` > `JSON Configuration` > `OxTrust Configuration`, locate the `Scim Properties` section (use Ctrl + F and search for `Scim`) and set the protection mode to `Oauth2`. Then save the configuration at the bottom of the page.
 
-- This article assumes that we are using the UMA protection scheme. For testing purposes, you may use the `TEST` scheme; however, this is not recommended in a production environment.
+- This article assumes that we are using the Oauth2 protection scheme. For testing purposes, you may use the `TEST` scheme, which is unprotected and can be queried without any authentication; however, this is not recommended in a production environment.
 
 ![Protection scheme]()
-Finally, we need to activate the UMA SCIM custom script. Navigate to `Configuration` > `Other Custom Scripts`, and in the tab for `UMA RPT policies` check `Enabled" for the script labeled "scim_access_policy`. Finally, click the `Update` button.
-![UMA Custom](https://gluu.org/docs/gluu-server/4.4/img/scim/enable_uma.png)
 
 Our Gluu server is now ready to accept authorized SCIM requests.
+
+## Configuring AWS to accept SAML requests
+1. Navigate to `https://<hostname>/idp/shibboleth` on your Gluu server and download the page as an XML file.
+2. Log into the AWS Management Console with an administrator account. Find and navigate to the IAM module.
+3. Create an IDP on your AWS account with the following steps:
+    - On the left hand pane, choose `Identity Providers`
+    - Click on `Add Provider`
+    - Provider type: `SAML`
+    - Provider name: `Shibboleth`
+    - Metadata document: Upload the XML file you downloaded.
+    - Click `Add Provider` at the bottom.
+
+![AWS IAM]()
+
+4. Create a role associated with the new IDP with the following steps:
+    - On the left hand pane, choose `Roles`
+    - Trusted Entity Type: `SAML 2.0 Federation`
+    - SAML 2.0 Based Provider: `Shibboleth` (or what you chose for provider name previously) from the drop down menu.
+    - Tick `Allow programmatic and AWS Management Console Access`
+    - The rest of the fields will autofill.
+    - Click `Next`. Here you may choose policies to associate with this role. Refer to [AWS documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-idp_saml.html) for further information. For this example, we are not choosing any policies, and instead clicking `Next`.
+    - Role name: `Shibboleth-Dev`
+    - Role description: Choose a meaningful description. 
+    - Verify that the Role Trust JSON looks like this (the X's will be some unique string):
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": "sts:AssumeRoleWithSAML",
+            "Principal": {
+                "Federated": "arn:aws:iam::xxxxxxxxxxxx:saml-provider/Shibboleth"
+            },
+            "Condition": {
+                "StringEquals": {
+                    "SAML:aud": [
+                        "https://signin.aws.amazon.com/saml"
+                    ]
+                }
+            }
+        }
+    ]
+}
+```
+Finally, click on `Create Role`
