@@ -113,7 +113,7 @@ objectClasses: ( 1.3.6.1.4.1.48710.1.4.101 NAME 'gluuCustomPerson'
     - Status: Active
     - Click `Register`
 
-    ![RoleEntitlement]()
+    ![RoleEntitlement](https://github.com/SafinWasi/gluu-aws-integration/blob/devel/assets/roleentitlement.png?raw=true)
 
 6. For the second attribute:
     - Name: `RoleSessionName`
@@ -123,7 +123,7 @@ objectClasses: ( 1.3.6.1.4.1.48710.1.4.101 NAME 'gluuCustomPerson'
 
     Every other field will have the same values as the first attribute.
 
-    ![RoleSessionName]()
+    ![RoleSessionName](https://github.com/SafinWasi/gluu-aws-integration/blob/devel/assets/roleSessionName.png?raw=true)
 
 7. If everything is successful, these two attributes will successfully be saved and will show up under the `Attributes` tab. If you get an error saying the attributes don't exist, there was probably an error in your custom schema doc. Refer to the logs for more information.
 
@@ -195,4 +195,58 @@ Now we need to create an outbound SAML trust relationship from the Gluu Server t
     - SP metadata URL: `https://signin.aws.amazon.com/static/saml-metadata.xml`
     - Check the box next to `Configure relying party` and an additional box will pop up.
         - Click on `SAML2SSO` and click Add; then expand the SAML2 SSO Profile menu.
-        ![rp-config]()
+        ![rp-config](https://github.com/SafinWasi/gluu-aws-integration/blob/devel/assets/rp-config.png?raw=true)
+
+        - Use the following values:
+        - `includeAtributeStatemen`: yes
+        - `assertionLifetime`: 300000
+        - `signResponses`: conditional
+        - `signAssertions`: never
+        - `signRequests`: conditional
+        - `encryptAssertions`: never
+        - `encryptNameIds`: never
+        - Click `Save`
+    - On the right hand side, under `Release additional attributes`, there is a list of attributes that can be released to this relationship. From those, choose the following:
+        - From `gluuPerson`, click on `Email` and `Username`
+        - From `gluuCustomPerson`, click on `RoleEntitlement` and `RoleSessionName`
+        - ![aws-trust]()
+4. Save this trust relationship. It will take some time to fully load, so please wait.
+
+## Create the test user manually
+
+Now we will create a test user on the Gluu server to check whether the outbound SAML works. Later, we will do this via SCIM requests. This user needs to have an email that is authorized to access the AWS account we want to sign on to. For this example, we will use dummy details. You will want to use your own details. 
+
+First, we need to get some values from our AWS account. Log onto AWS.
+
+1. For the first value, navigate to `Roles` and click on the role you created for the SAML relationship. Copy the ARN, which for us is in the format `arn:aws:iam::XXXXXXXXXXXX:role/Shibboleth-Dev`, with numbers replacing the Xs. Note this down.
+
+    ![role-arn]()
+
+2. For the second value, navigate to `Identity providers` and click on the provider you created. Copy the ARN, which should be in a similar format. For us it is `arn:aws:iam::XXXXXXXXXXXX:saml-provider/Shibboleth`, with numbers replacing the Xs. Note this down as well.
+
+    ![iam-arn]()
+
+3. From the oxTrust GUI, navigate to `Users` > `Add person`
+4. Our example values are as follows:
+    - `Username`: Alice
+    - `First Name`: Bob
+    - `Display Name`: Bob
+    - `Last Name`: Alice
+    - `Email`: bob@alice.example
+    - `Password`: any password
+    - `Confirm Password`: repeat the password
+    - `User Status`: Active
+    - From the right hand side, click on the `gluuCustomPerson` class and click on the two custom attributes. They will show up as entry fields in the form to the left.
+    - `RoleEntitlement`: The first value and the second value from steps 1 and 2, separated by a comma. For us it is `arn:aws:iam::XXXXXXXXXXXX:role/Shibboleth-Dev,arn:aws:iam::XXXXXXXXXXXX:saml-provider/Shibboleth`.
+    - RoleSessionName: The email address that will be used to log onto AWS. We will use a dummy value, `bob@alice.example`.
+
+    ![new-user]()
+
+5. Click Add. Our new user should look like this:
+
+![new-user-done]()
+
+## Testing SSO
+
+Before using SCIM, we recommend testing out the SAML flow to SSO onto Amazon. To do this, simply visit `https://<hostname>/idp/profile/SAML2/Unsolicited/SSO?providerId=urn:amazon:webservices` and use your new Gluu user. You should seamlessly be able to log onto AWS.
+
