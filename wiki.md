@@ -11,6 +11,9 @@ This article will guide you through setting up SCIM on your Gluu Solo instance, 
 1. [Requirements](#requirements)
 2. [Preparing the Gluu Server](#preparing-the-gluu-server)
 3. [Configuring AWS to accept SAML requests](#configuring-aws-to-accept-saml-requests)
+4. [Creating a Trust relationship in Gluu Server](#create-trust-relationship-in-gluu-server)
+5. [Creating a test user manually](#create-the-test-user-manually)
+6. [Testing  SSO](#testing-sso)
 
 
 
@@ -94,7 +97,7 @@ objectClasses: ( 1.3.6.1.4.1.48710.1.4.101 NAME 'gluuCustomPerson'
   X-ORIGIN 'Gluu - Custom persom objectclass' )
 ```
 
-**Warning**: Do NOT replace your `objectClasses` with the example above. Simply add `" $ RoleEntitlement "` and `" $ RoleSessionName "` without the quotes to the `MAY` field, as shown in the example. Be careful of spacing; there must be 2 spaces before and 1 after every entry (i.e. DESC), or your custom schema will fail to load properly because of a validation error. You cannot have line spaces between attributeTypes: or objectClasses:. This will cause failure in schema. Please check the error logs in `/opt/opendj/logs/errors` if you are experiencing issues with adding custom schema. In addition, make sure the attributetype LDAP ID number is unique. 
+**Warning**: Do NOT replace your `objectClasses` with the example above. Simply add `" $ RoleEntitlement "` and `" $ RoleSessionName "` without the quotes to the `MAY` field, as shown in the example. Be careful of spacing; there must be 2 spaces before and 1 after every entry (i.e. DESC), or your custom schema will fail to load properly because of a validation error. You cannot have line spaces between attributeTypes: or objectClasses:. This will cause failure in schema. Please check the error logs in `/opt/opendj/logs/errors` if you are experiencing issues with adding custom schema. In addition, make sure the attributeTypes LDAP ID number is unique. 
 
 3. Save the file, and [restart](https://gluu.org/docs/gluu-server/4.4/operation/services/#restart) the opendj service.
 4. Now, we need to register two attributes in oxTrust corresponding to the LDAP attributes we just added. Log onto the web GUI, navigate to `Configuration` > `Attributes` > `Register Attribute`.
@@ -113,7 +116,7 @@ objectClasses: ( 1.3.6.1.4.1.48710.1.4.101 NAME 'gluuCustomPerson'
     - Status: Active
     - Click `Register`
 
-    ![RoleEntitlement](https://github.com/SafinWasi/gluu-aws-integration/blob/devel/assets/roleentitlement.png?raw=true)
+        ![RoleEntitlement](https://github.com/SafinWasi/gluu-aws-integration/blob/devel/assets/roleentitlement.png?raw=true)
 
 6. For the second attribute:
     - Name: `RoleSessionName`
@@ -149,7 +152,7 @@ objectClasses: ( 1.3.6.1.4.1.48710.1.4.101 NAME 'gluuCustomPerson'
     - Tick `Allow programmatic and AWS Management Console Access`
     - The rest of the fields will autofill.
 
-    ![AWS Role](https://github.com/SafinWasi/gluu-aws-integration/blob/devel/assets/aws-role.png?raw=true)
+        ![AWS Role](https://github.com/SafinWasi/gluu-aws-integration/blob/devel/assets/aws-role.png?raw=true)
 
     - Click `Next`. Here you may choose policies to associate with this role. Refer to [AWS documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-idp_saml.html) for further information. For this example, we are not choosing any policies, and instead clicking `Next`.
     - Role name: `Shibboleth-Dev`
@@ -209,7 +212,7 @@ Now we need to create an outbound SAML trust relationship from the Gluu Server t
     - On the right hand side, under `Release additional attributes`, there is a list of attributes that can be released to this relationship. From those, choose the following:
         - From `gluuPerson`, click on `Email` and `Username`
         - From `gluuCustomPerson`, click on `RoleEntitlement` and `RoleSessionName`
-        - ![aws-trust]()
+            ![aws-trust](https://github.com/SafinWasi/gluu-aws-integration/blob/devel/assets/aws-trust.png?raw=true)
 4. Save this trust relationship. It will take some time to fully load, so please wait.
 
 ## Create the test user manually
@@ -220,11 +223,11 @@ First, we need to get some values from our AWS account. Log onto AWS.
 
 1. For the first value, navigate to `Roles` and click on the role you created for the SAML relationship. Copy the ARN, which for us is in the format `arn:aws:iam::XXXXXXXXXXXX:role/Shibboleth-Dev`, with numbers replacing the Xs. Note this down.
 
-    ![role-arn]()
+    ![role-arn](https://github.com/SafinWasi/gluu-aws-integration/blob/devel/assets/role-arn.png?raw=true)
 
 2. For the second value, navigate to `Identity providers` and click on the provider you created. Copy the ARN, which should be in a similar format. For us it is `arn:aws:iam::XXXXXXXXXXXX:saml-provider/Shibboleth`, with numbers replacing the Xs. Note this down as well.
 
-    ![iam-arn]()
+    ![iam-arn](https://github.com/SafinWasi/gluu-aws-integration/blob/devel/assets/iam-arn.png?raw=true)
 
 3. From the oxTrust GUI, navigate to `Users` > `Add person`
 4. Our example values are as follows:
@@ -240,11 +243,11 @@ First, we need to get some values from our AWS account. Log onto AWS.
     - `RoleEntitlement`: The first value and the second value from steps 1 and 2, separated by a comma. For us it is `arn:aws:iam::XXXXXXXXXXXX:role/Shibboleth-Dev,arn:aws:iam::XXXXXXXXXXXX:saml-provider/Shibboleth`.
     - RoleSessionName: The email address that will be used to log onto AWS. We will use a dummy value, `bob@alice.example`.
 
-    ![new-user]()
+    ![new-user](https://github.com/SafinWasi/gluu-aws-integration/blob/devel/assets/new-user.png?raw=true)
 
 5. Click Add. Our new user should look like this:
 
-![new-user-done]()
+    ![new-user-done](https://github.com/SafinWasi/gluu-aws-integration/blob/devel/assets/new-user-done.png?raw=true)
 
 ## Testing SSO
 
