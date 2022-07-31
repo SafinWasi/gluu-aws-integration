@@ -15,6 +15,7 @@ This article will guide you through setting up SCIM on your Gluu Solo instance, 
 5. [Creating a test user manually](#create-the-test-user-manually)
 6. [Setup for SCIM](#setup-for-scim)
 7. [Setting up scim-client](#setting-up-scim-client)
+8. [Creating user for SSO through SCIM](#creating-user-for-sso-through-scim)
 
 
   
