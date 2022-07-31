@@ -340,3 +340,126 @@ For this article, we will be using [scim-client](https://github.com/GluuFederati
     # keytool -importcert -trustcacerts -cacerts -file httpd.crt
     ```
 - Online Java-docs for scim-client are available [here](https://maven.gluu.org/javadocs/scim/version_4.4.0/client/). You can generate java-docs locally too using Maven; just run `mvn javadoc:javadoc -pl scim-client`.
+- Create a simple project in your Java IDE. There are two ways of using scim-client: obtain the JAR file [here](https://maven.gluu.org/maven/org/gluu/scim-client/), or use Maven. If you choose to obtain the JAR file, import it as an external dependency. If you're using Maven, add the following snippets to your  `pom.xml`:
+    ```xml
+    <properties>
+        <scim.client.version>4.4.0.Final</scim.client.version>
+    </properties>
+    ...
+    <repositories>
+    <repository>
+        <id>gluu</id>
+        <name>Gluu repository</name>
+        <url>https://maven.gluu.org/maven</url>
+    </repository>
+    </repositories>
+    ...
+    <dependency>
+    <groupId>org.gluu</groupId>
+    <artifactId>scim-client</artifactId>
+    <version>${scim.client.version}</version>
+    </dependency>
+    ```
+    Then run `mvn install` in your project directory. This will download and build the necessary dependencies. We will also be using [Apache Log4j2](https://logging.apache.org/log4j/2.x/index.html), so be sure to obtain it either directly or through maven. Set up log4j to log to console for all log levels. Refer to the [documentation](https://logging.apache.org/log4j/2.x/manual/configuration.html) on how to do this.
+
+    **Warning**: The current build of scim-client on maven contains a bug that causes operation in OAuth mode with private JWK pair authentication impossible. This has been fixed on the master branch of the source code. A possible workaround is to clone the [repository](https://github.com/GluuFederation/scim/tree/master/scim-client) and build scim-client locally, then import the JAR. For this example we are using version 4.4.0.Final.
+- To begin testing, we will query our "Alice" user. Set up a new class named `TestOauthClient` and fill in the class as follows:
+    ```java
+    import gluu.scim2.client.factory.ScimClientFactory;
+    import gluu.scim2.client.rest.ClientSideService;
+    import org.apache.logging.log4j.LogManager;
+    import org.apache.logging.log4j.Logger;
+    import org.gluu.oxtrust.model.scim2.BaseScimResource;
+    import org.gluu.oxtrust.model.scim2.ListResponse;
+    import org.gluu.oxtrust.model.scim2.user.UserResource;
+    import org.gluu.oxtrust.model.scim2.user.Name;
+    import org.gluu.oxtrust.model.scim2.user.Email;
+
+
+    import javax.ws.rs.core.Response;
+    import java.util.List;
+
+    public class TestOauthClient {
+
+        private String domainURL = "https://<host-name>/identity/restv1";
+        private String OIDCMetadataUrl = "https://<host-name>/.well-known/openid-configuration";
+        private String clientId = "<your client ID>";
+        private String keyPath = "<path to your Java keystore file>";
+        Path path = Paths.get(keyPath);
+        private String keyStorePassword = "<your keystore password>";
+        private String keyId = "<alias for the key in your keystore>";
+
+        private Logger logger = LogManager.getLogger(getClass());
+
+        private void simpleSearch() throws Exception {
+
+            ClientSideService client = ScimClientFactory.getOAuthClient(domainURL, OIDCMetadataUrl, clientId, path,keyStorePassword, keyId);
+            String filter = "userName eq \"Alice\"";
+
+            Response response = client.searchUsers(filter, 1, 1, null, null, null, null);
+            List<BaseScimResource> resources = response.readEntity(ListResponse.class).getResources();
+
+            logger.info("Length of results list is: {}", resources.size());
+            UserResource admin = (UserResource) resources.get(0);
+            logger.info("First user in the list is: {}", admin.getDisplayName());
+
+            client.close();
+
+        }
+
+        public static void main(String[] args) {
+            TestOauthClient client = new TestOauthClient();
+            try {
+                client.simpleSearch();
+            } catch(Exception e) {
+                System.out.println(e);
+            }
+        }
+
+    }
+    ```
+- Then run the main class. If everything runs properly, the logger should log the entire authentication process and output a single user, with the "Alice" username.
+
+## Creating user for SSO through SCIM
+While creating a user for SSO to AWS, the user needs to have two custom attributes, `RoleSessionName` and `RoleEntitlement`. For this, the client we're using will need access to the `https://gluu.org/scim/users.write` scope, so grant it in oxTrust. We can use scim-client libraries to create a new user and add those attributes. For us, the code stands as such:
+```java
+private void createUser() throws Exception {
+    ClientSideService client = ScimClientFactory.getOAuthClient(domainURL, OIDCMetadataUrl, clientId, path, keyStorePassword, keyId);
+    UserResource user = new UserResource();
+
+    Name name = new Name();
+    name.setGivenName("John");
+    name.setFamilyName("Doe");
+    user.setName(name);
+
+    user.setActive(true);
+    user.setUserName("JohnDoe");
+    // Do not do this in a production environment:
+    user.setPassword("changeit");
+
+    List<Email> emailList = new ArrayList<Email>();
+    Email email = new Email();
+    email.setPrimary(true);
+    email.setType("work");
+    email.setValue("johndoe@example.com");
+    emailList.add(email);
+    user.setEmails(emailList);
+
+    // Use the URI associated with the custom extension of these attributes.
+    CustomAttributes attributes = new CustomAttributes("urn:ietf:params:scim:schemas:extension:gluu:2.0:User");
+    // This needs to have access to AWS
+    attributes.setAttribute("RoleSessionName", "johndoe@example.com");
+    // Replace Xs with your ARN numbers
+    attributes.setAttribute("RoleEntitlement", "arn:aws:iam::XXXXXXXXXXXX:role/Shibboleth-Dev,arn:aws:iam::XXXXXXXXXXXX:saml-provider/Shibboleth");
+    user.addCustomAttributes(attributes);
+
+    Response response = client.createUser(user, null, null);
+    logger.info("response HTTP code = {}", response.getStatus());
+    client.close();
+}
+
+```
+
+If everything was successful, you should get a response code of 201 and the user should show up under `Users` > `Manage People` in  oxTrust. You might need to search for the username.
+
+Finally, visit `https://<hostname>/idp/profile/SAML2/Unsolicited/SSO?providerId=urn:amazon:webservices` and log on with this new user. You should be able to log on to AWS with this new account.
