@@ -13,8 +13,8 @@ This article will guide you through setting up SCIM on your Gluu Solo instance, 
 3. [Configuring AWS to accept SAML requests](#configuring-aws-to-accept-saml-requests)
 4. [Creating a Trust relationship in Gluu Server](#create-trust-relationship-in-gluu-server)
 5. [Creating a test user manually](#create-the-test-user-manually)
-6. [Testing  SSO](#testing-sso)
-
+6. [Setup for SCIM](#setup-for-scim)
+7. [Setting up scim-client](#setting-up-scim-client)
 
 
   
@@ -27,7 +27,7 @@ This article will guide you through setting up SCIM on your Gluu Solo instance, 
 
 3. An email address associated with an AWS account that you want to SSO with
 
-4. A way to craft SCIM requests for an endpoint protected by [Oauth 2.0](https://datatracker.ietf.org/doc/html/rfc6749). If you are using Java, we recommend using [scim-client](https://github.com/GluuFederation/scim/tree/master/scim-client).
+4. A way to craft SCIM requests for an endpoint protected by [OAuth 2.0](https://datatracker.ietf.org/doc/html/rfc6749). If you are using Java, we recommend using [scim-client](https://github.com/GluuFederation/scim/tree/master/scim-client).
 
   
 
@@ -65,9 +65,9 @@ Next, we need to enable the SCIM API. Log onto the oxTrust GUI, go to `Organizat
 
 ![oxTrust Panel](https://gluu.org/docs/gluu-server/4.4/img/scim/enable-scim.png)
 
-After that, navigate to `Configuration` > `JSON Configuration` > `OxTrust Configuration`, locate the `Scim Properties` section (use Ctrl + F and search for `Scim`) and set the protection mode to `Oauth2`. Then save the configuration at the bottom of the page.
+After that, navigate to `Configuration` > `JSON Configuration` > `OxTrust Configuration`, locate the `Scim Properties` section (use Ctrl + F and search for `Scim`) and set the protection mode to `OAUTH`. Then save the configuration at the bottom of the page.
 
-- This article assumes that we are using the Oauth2 protection scheme. For testing purposes, you may use the `TEST` scheme, which is unprotected and can be queried without any authentication; however, this is not recommended in a production environment.
+- This article assumes that we are using the OAuth2 protection scheme. For testing purposes, you may use the `TEST` scheme, which is unprotected and can be queried without any authentication; however, this is not recommended in a production environment.
 
 ![Protection scheme](https://github.com/SafinWasi/gluu-aws-integration/blob/devel/assets/protection-mode.png?raw=true)
 
@@ -253,3 +253,84 @@ First, we need to get some values from our AWS account. Log onto AWS.
 
 Before using SCIM, we recommend testing out the SAML flow to SSO onto Amazon. To do this, simply visit `https://<hostname>/idp/profile/SAML2/Unsolicited/SSO?providerId=urn:amazon:webservices` and use your new Gluu user. You should seamlessly be able to log onto AWS.
 
+## Setup for SCIM
+Communicating with a SCIM endpoint that is protected by OAuth is not a simple task. There are several registration and authentication steps involved because of security concerns. The [scim-client](https://github.com/GluuFederation/scim/tree/master/scim-client) Java library simplifies the actual request and response step, but some preparation is required. For this example, we will be using private key authentication using OpenID. In order to do this we need the following things:
+
+1. An RSA key pair and an associated certificate for our client and the Gluu server to communicate over.
+2. A [Java keystore](https://docs.oracle.com/cd/E19509-01/820-3503/ggffo/index.html) JKS file that contains the private key and the associated certificate (or chain).
+3. The public key of the key pair in [JSON web key](https://datatracker.ietf.org/doc/html/rfc7517) format, preferably saved to a file. 
+4. The SSL certificate of our Gluu server, which can be found at `/opt/gluu-server/etc/certs/httpd.crt`. You can obtain this by using `scp`.
+
+### Steps involving a SCIM query
+0. If this is the first time a query is being made, the requesting party registers a new client with the Gluu server using OpenID connect [dynamic client registration](https://openid.net/specs/openid-connect-registration-1_0.html). The public key for the client is uploaded to the server at this time. The requesting party obtains a Client ID, which will be used for subsequent steps.
+1. The client requests an OAuth access token using the Client ID and its private key, and obtains an access token from the token endpoint.
+2. This access token is used to make SCIM queries.
+
+Steps 1 and 2 can be automated by `scim-client`. The manual preparation is needed for step 0.
+
+### Generating keys
+You will need Java 11 (and keytool) along with OpenSSL installed on your machine. Run the following command to generate a private key; enter a passcode when prompted and remember it.
+```
+openssl genrsa -des3 -out private-key.pem 2048
+```
+Next, generate the associated public key with the following command:
+```
+openssl rsa -in private-key.pem -pubout -out public-key.pem
+```
+It will ask you for the password for the private key; enter when prompted.
+Finally, generate a self-signed certificate for the key pair:
+```
+openssl req -new -x509 -key private-key.pem -out cert.pem -days 360
+```
+You will be prompted for the private key password and some distinguished values necessary for generating a certificate. In a test environment you may use dummy values. However, in a production environment you will want to use appropriate values.
+
+You should now have three files:
+- private-key.pem
+- public-key.pem
+- cert.pem
+
+### Creating new Java keystore
+First we need to concatenate the private key and certificate to one file.
+```
+cat private-key.pem cert.pem > import.pem
+```
+Next, we need to convert this file to a PKCS12 keystore.
+```
+openssl pkcs12 -export -in import.pem -name bob > server.p12
+```
+Replace `bob` with some name you can remember. It will prompt you for the private key password, then a new password for the PKCS12 keystore.
+Finally, we use keytool to create a new Java keystore and import:
+```
+keytool -importkeystore -srckeystore server.p12 -destkeystore client-key.jks -srcstoretype pkcs12 -alias bob
+```
+For `alias`, choose whatever name you originally chose for the PKCS12 keystore. For us it is still `bob` and so that's what we chose.
+
+### Creating a JSON web key set
+1. Visit https://russelldavies.github.io/jwk-creator/.
+2. Fill in the following details:
+    - Public Key Use: Signing
+    - Algorithm: RS256
+    - Key ID: The alias you chose. For us it is `bob`.
+    - PEM encoded key: The public key you generated, from `public-key.pem`.
+3. Click `Convert`,  and save the output on the right to a file. Name it `client-key.jwks`.
+
+At this point you should have the following files:
+- `client-key.jks`
+- `client-key.jwks`
+
+If you're ready with these two files, proceed to `Dynamic Client Registration`
+
+### Dynamic Client Registration using OpenID connect
+For your convenience, I have created a Python script for you which can automate this process. Visit https://github.com/SafinWasi/gluu_openid_python and follow the instructions in the README. Once it's done, you should have a `client.json` file that contains the Client ID and secret. Do not share this information.
+
+If you wish to do this manually, please refer to [Dynamic Client Registration](https://openid.net/specs/openid-connect-registration-1_0.html).
+
+### Allowing the new client access to SCIM
+By default, the new client does not have access to SCIM scopes. To allow this:
+- Login to oxTrust and locate the client created for interaction with SCIM. This should be easy to do by searching for the client name you provided.
+- Click the "Add Scope" button.
+- Tick the scopes prefixed by "https://gluu.org/scim". The kind of access every scope grants is displayed on the right column. It may be helpful to sort the scopes list by name.
+
+You may add scopes to the client as you need. For a full list, visit `Scopes` in oxTrust. For our example, we will add `https://gluu.org/scim/users.read`, which is for querying and searching user resources.
+
+## Setting up scim-client
