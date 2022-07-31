@@ -60,9 +60,7 @@ For SCIM:
 
 ```
 
-Next, we need to enable the SCIM API. Log onto the oxTrust GUI, go to `Organization` > `Organization Configuration` and check the tick mark for `SCIM Support`
-
-  
+Next, we need to enable the SCIM API. Log onto the oxTrust GUI, go to `Organization` > `Organization Configuration` and check the tick mark for `SCIM Support`.
 
 ![oxTrust Panel](https://gluu.org/docs/gluu-server/4.4/img/scim/enable-scim.png)
 
@@ -79,26 +77,26 @@ Next, we need to add two custom attribute types to our Gluu LDAP.
 1. SSH into your Gluu server, and open `/opt/opendj/config/schema/77-customAttributes.ldif` with your favorite editor.
 2. Add the following `attributeTypes`, and then modify your `gluuCustomPerson objectClass` to add those two `attributeTypes`. Here is a part of our schema doc after modification:
 
-```
-...
-attributeTypes: ( 1.3.6.1.4.1.48710.1.3.1003 NAME 'RoleEntitlement'
-  EQUALITY caseIgnoreMatch
-  SUBSTR caseIgnoreSubstringsMatch
-  SYNTAX 1.3.6.1.4.1.1466.115.121.1.15
-  X-ORIGIN 'Gluu - AWS Assume Role' )
-attributeTypes: ( 1.3.6.1.4.1.48710.1.3.1004 NAME 'RoleSessionName'
-  EQUALITY caseIgnoreMatch
-  SUBSTR caseIgnoreSubstringsMatch
-  SYNTAX 1.3.6.1.4.1.1466.115.121.1.15
-  X-ORIGIN 'Gluu - AWS Assume Role Session Name' )
-objectClasses: ( 1.3.6.1.4.1.48710.1.4.101 NAME 'gluuCustomPerson'
-  SUP ( top )
-  AUXILIARY
-  MAY ( telephoneNumber $ mobile $ RoleEntitlement $ RoleSessionName )
-  X-ORIGIN 'Gluu - Custom persom objectclass' )
-```
+    ```
+    ...
+    attributeTypes: ( 1.3.6.1.4.1.48710.1.3.1003 NAME 'RoleEntitlement'
+    EQUALITY caseIgnoreMatch
+    SUBSTR caseIgnoreSubstringsMatch
+    SYNTAX 1.3.6.1.4.1.1466.115.121.1.15
+    X-ORIGIN 'Gluu - AWS Assume Role' )
+    attributeTypes: ( 1.3.6.1.4.1.48710.1.3.1004 NAME 'RoleSessionName'
+    EQUALITY caseIgnoreMatch
+    SUBSTR caseIgnoreSubstringsMatch
+    SYNTAX 1.3.6.1.4.1.1466.115.121.1.15
+    X-ORIGIN 'Gluu - AWS Assume Role Session Name' )
+    objectClasses: ( 1.3.6.1.4.1.48710.1.4.101 NAME 'gluuCustomPerson'
+    SUP ( top )
+    AUXILIARY
+    MAY ( telephoneNumber $ mobile $ RoleEntitlement $ RoleSessionName )
+    X-ORIGIN 'Gluu - Custom persom objectclass' )
+    ```
 
-**Warning**: Do NOT replace your `objectClasses` with the example above. Simply add `" $ RoleEntitlement "` and `" $ RoleSessionName "` without the quotes to the `MAY` field, as shown in the example. Be careful of spacing; there must be 2 spaces before and 1 after every entry (i.e. DESC), or your custom schema will fail to load properly because of a validation error. You cannot have line spaces between attributeTypes: or objectClasses:. This will cause failure in schema. Please check the error logs in `/opt/opendj/logs/errors` if you are experiencing issues with adding custom schema. In addition, make sure the attributeTypes LDAP ID number is unique. 
+    **Warning**: Do NOT replace your `objectClasses` with the example above. Simply add `" $ RoleEntitlement "` and `" $ RoleSessionName "` without the quotes to the `MAY` field, as shown in the example. Be careful of spacing; there must be 2 spaces before and 1 after every entry (i.e. DESC), or your custom schema will fail to load properly because of a validation error. You cannot have line spaces between attributeTypes: or objectClasses:. This will cause failure in schema. Please check the error logs in `/opt/opendj/logs/errors` if you are experiencing issues with adding custom schema. In addition, make sure the attributeTypes LDAP ID number is unique. 
 
 3. Save the file, and [restart](https://gluu.org/docs/gluu-server/4.4/operation/services/#restart) the opendj service.
 4. Now, we need to register two attributes in oxTrust corresponding to the LDAP attributes we just added. Log onto the web GUI, navigate to `Configuration` > `Attributes` > `Register Attribute`.
@@ -160,27 +158,27 @@ objectClasses: ( 1.3.6.1.4.1.48710.1.4.101 NAME 'gluuCustomPerson'
     - Role description: Choose a meaningful description. 
     - Verify that the Role Trust JSON looks like this (the X's will be some unique string):
 
-    ```json
-    {
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Effect": "Allow",
-                "Action": "sts:AssumeRoleWithSAML",
-                "Principal": {
-                    "Federated": "arn:aws:iam::xxxxxxxxxxxx:saml-provider/Shibboleth"
-                },
-                "Condition": {
-                    "StringEquals": {
-                        "SAML:aud": [
-                            "https://signin.aws.amazon.com/saml"
-                        ]
+        ```json
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": "sts:AssumeRoleWithSAML",
+                    "Principal": {
+                        "Federated": "arn:aws:iam::xxxxxxxxxxxx:saml-provider/Shibboleth"
+                    },
+                    "Condition": {
+                        "StringEquals": {
+                            "SAML:aud": [
+                                "https://signin.aws.amazon.com/saml"
+                            ]
+                        }
                     }
                 }
-            }
-        ]
-    }
-    ```
+            ]
+        }
+        ```
     - Finally, click on `Create Role`.
 
 AWS is now ready to accept inbound SAML.
@@ -446,7 +444,9 @@ private void createUser() throws Exception {
     emailList.add(email);
     user.setEmails(emailList);
 
-    // Use the URI associated with the custom extension of these attributes.
+    /*  Use the URI associated with the custom extension of these attributes. You can find this in oxTrust
+        under Configuration > JSON Configuration > OxTrust Configuration > Scim properties
+    */
     CustomAttributes attributes = new CustomAttributes("urn:ietf:params:scim:schemas:extension:gluu:2.0:User");
     // This needs to have access to AWS
     attributes.setAttribute("RoleSessionName", "johndoe@example.com");
