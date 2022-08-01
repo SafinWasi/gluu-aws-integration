@@ -1,10 +1,6 @@
 # SCIM support on Gluu Solo for external SSO
 
-  
-
 This article will guide you through setting up SCIM on your Gluu Solo instance, in order to create/modify/delete users that can seamlessly use Single-Sign-On (SSO) on an external application. For this example, we will be using Gluu Solo 4.4 with Amazon Web Services as the external application.
-
-  
 
 ## Table of contents
 
@@ -16,21 +12,15 @@ This article will guide you through setting up SCIM on your Gluu Solo instance, 
 6. [Setup for SCIM](#setup-for-scim)
 7. [Setting up scim-client](#setting-up-scim-client)
 8. [Creating user for SSO through SCIM](#creating-user-for-sso-through-scim)
-
-
-  
+9. [Updating a user](#updating-a-user)
+10. [Deleting a user](#deleting-a-user)
 
 ## Requirements
 
 1. A working Gluu installation with Shibboleth IDP and the SCIM API installed and enabled
-
 2. An AWS account with administrative priviledges
-
 3. An email address associated with an AWS account that you want to SSO with
-
 4. A way to craft SCIM requests for an endpoint protected by [OAuth 2.0](https://datatracker.ietf.org/doc/html/rfc6749). If you are using Java, we recommend using [scim-client](https://github.com/GluuFederation/scim/tree/master/scim-client).
-
-  
 
 ## Preparing the Gluu Server
 
@@ -43,8 +33,6 @@ cd /install/community-edition-setup/
 ```
 
 For Shibboleth:
-
-  
 
 ```bash
 
@@ -128,8 +116,6 @@ Next, we need to add two custom attribute types to our Gluu LDAP.
     ![RoleSessionName](https://github.com/SafinWasi/gluu-aws-integration/blob/devel/assets/roleSessionName.png?raw=true)
 
 7. If everything is successful, these two attributes will successfully be saved and will show up under the `Attributes` tab. If you get an error saying the attributes don't exist, there was probably an error in your custom schema doc. Refer to the logs for more information.
-
-
 
 ## Configuring AWS to accept SAML requests
 1. Navigate to `https://<hostname>/idp/shibboleth` on your Gluu server and download the page as an XML file.
@@ -249,8 +235,7 @@ First, we need to get some values from our AWS account. Log onto AWS.
     ![new-user-done](https://github.com/SafinWasi/gluu-aws-integration/blob/devel/assets/new-user-done.png?raw=true)
 
 ## Testing SSO
-
-Before using SCIM, we recommend testing out the SAML flow to SSO onto Amazon. To do this, simply visit `https://<hostname>/idp/profile/SAML2/Unsolicited/SSO?providerId=urn:amazon:webservices` and use your new Gluu user. You should seamlessly be able to log onto AWS.
+Before using SCIM, we recommend testing out the SAML flow to SSO onto Amazon. To do this, simply visit `https://<hostname>/idp/profile/SAML2/Unsolicited/SSO?providerId=urn:amazon:webservices` and use your new Gluu user. You should be able to log onto AWS without any additional steps.
 
 ## Setup for SCIM
 Communicating with a SCIM endpoint that is protected by OAuth is not a simple task. There are several registration and authentication steps involved because of security concerns. The [scim-client](https://github.com/GluuFederation/scim/tree/master/scim-client) Java library simplifies some steps, but some preparation is required. For this example, we will be using private key authentication using OpenID. In order to do this we need the following things:
@@ -420,10 +405,14 @@ For this article, we will be using [scim-client](https://github.com/GluuFederati
 - Then run the main class. If everything runs properly, the logger should log the entire authentication process and output a single user, with the "Alice" username.
 
 ## Creating user for SSO through SCIM
+The SCIM API provides request verbs similar to HTTP requests for operation. The verbs are as follows: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`. A summary of these verbs can be found [here](https://gluu.org/docs/gluu-server/4.4/api-guide/scim-api/#http-verbs). For the scim-client implementations of these requests, you can check the [javadocs](https://maven.gluu.org/javadocs/scim/version_4.4.0/model/org/gluu/oxtrust/ws/rs/scim2/IUserWebService.html). For creating a new user, we will be using the `POST` request.
+
 While creating a user for SSO to AWS, the user needs to have two custom attributes, `RoleSessionName` and `RoleEntitlement`. For this, the client we're using will need access to the `https://gluu.org/scim/users.write` scope, so grant it in oxTrust. We can use scim-client libraries to create a new user and add those attributes. For us, the code stands as such:
 ```java
 private void createUser() throws Exception {
     ClientSideService client = ScimClientFactory.getOAuthClient(domainURL, OIDCMetadataUrl, clientId, path, keyStorePassword, keyId);
+
+    // Creating a new user
     UserResource user = new UserResource();
 
     Name name = new Name();
@@ -454,6 +443,7 @@ private void createUser() throws Exception {
     attributes.setAttribute("RoleEntitlement", "arn:aws:iam::XXXXXXXXXXXX:role/Shibboleth-Dev,arn:aws:iam::XXXXXXXXXXXX:saml-provider/Shibboleth");
     user.addCustomAttributes(attributes);
 
+    // This is the POST request
     Response response = client.createUser(user, null, null);
     logger.info("response HTTP code = {}", response.getStatus());
     client.close();
@@ -464,3 +454,22 @@ private void createUser() throws Exception {
 If everything was successful, you should get a response code of 201 and the user should show up under `Users` > `Manage People` in  oxTrust. You might need to search for the username.
 
 Finally, visit `https://<hostname>/idp/profile/SAML2/Unsolicited/SSO?providerId=urn:amazon:webservices` and log on with this new user. You should be able to log on to AWS with this new account.
+
+## Updating a user
+There are two requests that can update a user, `PUT` and `PATCH`. `PUT` is suitable for replacements using non-null values, while `PATCH` is suitable for addition, removal and localized updates of a user resource. Refer to [updateUser()](https://maven.gluu.org/javadocs/scim/version_4.4.0/model/org/gluu/oxtrust/ws/rs/scim2/IUserWebService.html#updateUser(org.gluu.oxtrust.model.scim2.user.UserResource,java.lang.String,java.lang.String,java.lang.String)) and [patchUser()](https://maven.gluu.org/javadocs/scim/version_4.4.0/model/org/gluu/oxtrust/ws/rs/scim2/IUserWebService.html#updateUser(org.gluu.oxtrust.model.scim2.user.UserResource,java.lang.String,java.lang.String,java.lang.String)) of the scim-client documentation for more information.
+
+## Deleting a user
+For deleting a user, only the ID (the `inum` attribute in LDAP) is required. You can check this by either going to oxTrust and getting the `inum` of the user or by inspecting the JSON of the response right after the user is created. You will need a way to convert the Java Response object to a JSON representation if you want to do this. A primitive way to do this is `String output = response.readEntity(String.class);`.
+
+```java
+Response response = client.deleteUser("ID");
+assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response.getStatus());
+```
+
+## References
+- [Gluu 4.4 Documentation](https://gluu.org/docs/gluu-server/4.4/)
+- [OpenID connect dynamic client registration](http://openid.net/specs/openid-connect-registration-1_0.html)
+- [OAuth 2.0](http://tools.ietf.org/html/rfc6749)
+- SCIM API ([RFC 7642](https://tools.ietf.org/html/rfc7642), [RFC 7643](https://tools.ietf.org/html/rfc7643) and [RFC 7644](https://tools.ietf.org/html/rfc7644))
+- [Generating RSA key pairs](https://www.scottbrady91.com/openssl/creating-rsa-keys-using-openssl)
+- [Online JWK creator](https://github.com/russelldavies/jwk-creator)
