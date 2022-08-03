@@ -1,4 +1,4 @@
-# SCIM support on Gluu Solo for external SSO
+# Integrating Gluu Solo with AWS through SCIM
 
 This article will guide you through setting up SCIM on your Gluu Solo instance, in order to create/modify/delete users that can seamlessly use Single-Sign-On (SSO) on an external application. For this example, we will be using Gluu Solo 4.4 with Amazon Web Services as the external application.
 
