@@ -236,6 +236,7 @@ First, we need to get some values from our AWS account. Log onto AWS.
 
 ## Testing SSO
 Before using SCIM, we recommend testing out the SAML flow to SSO onto Amazon. To do this, simply visit `https://<hostname>/idp/profile/SAML2/Unsolicited/SSO?providerId=urn:amazon:webservices` and use your new Gluu user. You should be able to log onto AWS without any additional steps.
+[Workflow video](https://youtu.be/LBnTWE9IoCw)
 
 ## Setup for SCIM
 Communicating with a SCIM endpoint that is protected by OAuth is not a simple task. There are several registration and authentication steps involved because of security concerns. The [scim-client](https://github.com/GluuFederation/scim/tree/master/scim-client) Java library simplifies some steps, but some preparation is required. For this example, we will be using private key authentication using OpenID. In order to do this we need the following things:
