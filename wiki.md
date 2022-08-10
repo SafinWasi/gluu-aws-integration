@@ -242,7 +242,7 @@ Before using SCIM, we recommend testing out the SAML flow to SSO onto Amazon. To
 Communicating with a SCIM endpoint that is protected by OAuth is not a simple task. There are several registration and authentication steps involved because of security concerns. The [scim-client](https://github.com/GluuFederation/scim/tree/master/scim-client) Java library simplifies some steps, but some preparation is required. For this example, we will be using private key authentication using OpenID. In order to do this we need the following things:
 
 1. An RSA key pair and an associated certificate for our client and the Gluu server to communicate through.
-2. A [Java keystore](https://docs.oracle.com/cd/E19509-01/820-3503/ggffo/index.html) JKS file that contains the private key and the associated certificate (or chain).
+2. A [keystore](https://www.rfc-editor.org/rfc/rfc7292) file that contains the private key and the associated certificate (or chain). For this example we are using PKCS12; however, JKS should work although it is not recommended.
 3. The public key of the key pair in [JSON web key](https://datatracker.ietf.org/doc/html/rfc7517) format, preferably saved to a file. 
 4. The SSL certificate of our Gluu server, which can be found at `/opt/gluu-server/etc/certs/httpd.crt`. You can obtain this by using `scp`.
 
@@ -274,21 +274,16 @@ You should now have three files:
 - public-key.pem
 - cert.pem
 
-### Creating new Java keystore
+### Creating new keystore
 First we need to concatenate the private key and certificate to one file.
 ```
 cat private-key.pem cert.pem > import.pem
 ```
 Next, we need to convert this file to a PKCS12 keystore.
 ```
-openssl pkcs12 -export -in import.pem -name bob > server.p12
+openssl pkcs12 -export -in import.pem -name bob > client-keystore.pkcs12
 ```
 Replace `bob` with some name you can remember. It will prompt you for the private key password, then a new password for the PKCS12 keystore.
-Finally, we use keytool to create a new Java keystore and import:
-```
-keytool -importkeystore -srckeystore server.p12 -destkeystore client-keystore.jks -srcstoretype pkcs12 -alias bob
-```
-For `alias`, choose whatever name you originally chose for the PKCS12 keystore. For us it is still `bob` and so that's what we chose. Enter the source keystore password when prompted, and then the new password for the destination keystore.
 
 ### Creating a JSON web key set
 1. Visit https://russelldavies.github.io/jwk-creator/.
@@ -300,11 +295,11 @@ For `alias`, choose whatever name you originally chose for the PKCS12 keystore. 
 3. Click `Convert`,  and save the output on the right to a file. Name it `client-key.jwks`.
 
 At this point you should have the following files:
-- `client-keystore.jks`
+- `client-keystore.pkcs12`
 - `client-key.jwks`
 
 ### Dynamic Client Registration using OpenID connect
-For your convenience, I have created a Python script for you which can automate this process. Visit https://github.com/SafinWasi/gluu_openid_python and follow the instructions in the README. The script can either use the JWKS file or not, but for this tutorial we will be using the JWKS file. Once it's done, you should have a `client.json` file that contains the Client ID and secret. Do not share this information.
+For your convenience, I have created a Python script for you which can automate this process. Visit https://github.com/SafinWasi/gluu_openid_python and follow the instructions in the README. The script can either use the JWKS file or not, but for this tutorial we will be using the JWKS file for pairwise jwt authentication. Once it's done, you should have a `client.json` file that contains the Client ID and secret. Do not share this information.
 
 If you wish to do this manually, please refer to [Dynamic Client Registration](https://openid.net/specs/openid-connect-registration-1_0.html).
 
@@ -316,7 +311,10 @@ By default, the new client does not have access to SCIM scopes. To allow this:
 
 You may add scopes to the client as you need. For a full list, visit `Scopes` in oxTrust. For our example, we will add `https://gluu.org/scim/users.read`, which is for querying and searching user resources.
 
+**NOTE: The following section is for setting up Gluu's scim-client. If you have your own implementation for making SCIM requests to an endpoint protected by OAuth, you may skip this section.**
+
 ## Setting up scim-client
+
 For this article, we will be using [scim-client](https://github.com/GluuFederation/scim/tree/master/scim-client) version 4.4.0. Ideally, you will want to use the version that is the same as your Gluu server. Requisites for using scim-client in OAuth mode are as follows:
 
 - Entry-level knowledge of Java is enough. Make sure you have Java 11 or higher installed. The use of Maven as a build tool is recommended.
@@ -369,7 +367,7 @@ For this article, we will be using [scim-client](https://github.com/GluuFederati
         private String domainURL = "https://<host-name>/identity/restv1";
         private String OIDCMetadataUrl = "https://<host-name>/.well-known/openid-configuration";
         private String clientId = "<your client ID>";
-        private String keyPath = "<path to your Java keystore file>";
+        private String keyPath = "<path to your keystore file>";
         Path path = Paths.get(keyPath);
         private String keyStorePassword = "<your keystore password>";
         private String keyId = "<alias for the key in your keystore>";
